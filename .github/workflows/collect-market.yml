@@ -5,13 +5,15 @@ on:
     - cron: '17 */6 * * *'
 permissions:
   contents: write
+  pages: write
+  id-token: write
 concurrency:
   group: market-collector
   cancel-in-progress: false
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Collect daily rates
@@ -24,3 +26,23 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Refresh daily market observations"
           git push
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Stage tracked site files
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/site"
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+  deploy:
+    needs: collect
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
