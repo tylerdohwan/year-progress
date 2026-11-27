@@ -1,0 +1,39 @@
+name: Verify VIX embed visually
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/verify-vix.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - name: Capture official embed test
+        run: |
+          python3 -m http.server 8765 > /tmp/vix-http.log 2>&1 &
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch();
+          try {
+            const page = await browser.newPage({viewport:{width:900,height:1100}});
+            await page.goto('http://127.0.0.1:8765/vix-diagnostics.html');
+            await page.waitForTimeout(15000);
+            await page.screenshot({path:'vix-diagnostics.png',fullPage:true});
+            console.log('iframe count:',await page.locator('iframe').count());
+            console.log('Visual review required; iframe count is not quote verification.');
+          } finally { await browser.close(); }
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vix-diagnostics-private-review
+          path: vix-diagnostics.png
+          retention-days: 1
