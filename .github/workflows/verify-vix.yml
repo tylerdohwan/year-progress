@@ -6,6 +6,7 @@ on:
       - '.github/workflows/verify-vix.yml'
       - 'vix-proxy-test.html'
       - 'vix-diagnostics.html'
+      - 'vix-fred-test.html'
 permissions:
   contents: read
 jobs:
@@ -27,14 +28,17 @@ jobs:
           const browser = await chromium.launch();
           try {
             const page = await browser.newPage({viewport:{width:900,height:1100}});
-            for (const name of ['vix-diagnostics','vix-proxy-test']) {
+            for (const name of ['vix-fred-test']) {
             await page.goto('http://127.0.0.1:8765/'+name+'.html');
+            page.on('response', r => { if(r.url().includes('fred.stlouisfed.org')) console.log('FRED response',r.status(),r.url()); });
             await page.waitForTimeout(15000);
             await page.screenshot({path:name+'.png',fullPage:true});
             console.log('iframe count:',await page.locator('iframe').count());
             for (const frame of page.frames().slice(1)) {
               const body = await frame.locator('body').innerText({timeout:5000}).catch(()=> 'unreadable');
-              console.log(name, 'frame text:', body.slice(0,1200));
+              console.log(name, 'frame text:', body.slice(0,4000));
+              console.log('graph elements:', await frame.locator('svg, canvas, img').count());
+              console.log('frame URL:',frame.url());
             }
             console.log('Visual review required; iframe count is not quote verification.');
             }
@@ -44,6 +48,5 @@ jobs:
         with:
           name: vix-diagnostics-private-review
           path: |
-            vix-diagnostics.png
-            vix-proxy-test.png
+            vix-fred-test.png
           retention-days: 1
